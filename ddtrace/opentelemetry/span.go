@@ -36,6 +36,9 @@ type span struct {
 	statusInfo
 	*oteltracer
 	events []spanEvent
+	// otelSemanticsEnabled is copied from the tracer when the span starts so span
+	// methods read it directly instead of reaching back into the tracer.
+	otelSemanticsEnabled bool
 }
 
 func (s *span) TracerProvider() oteltrace.TracerProvider { return s.oteltracer.provider }
@@ -43,6 +46,13 @@ func (s *span) TracerProvider() oteltrace.TracerProvider { return s.oteltracer.p
 func (s *span) SetName(name string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.otelSemanticsEnabled {
+		// OTel semantics: the span name maps to the Datadog resource (the OTLP span-name
+		// field), not the DD-only operation name. Changing the default would shift RED
+		// metrics, so it is gated behind the flag.
+		s.attributes[ext.ResourceName] = name
+		return
+	}
 	s.attributes[ext.SpanName] = strings.ToLower(name)
 }
 
@@ -219,10 +229,11 @@ func (s *span) AddEvent(name string, opts ...oteltrace.EventOption) {
 // The list of reserved tags might be extended in the future.
 // Any other non-reserved tags will be set as provided.
 func (s *span) SetAttributes(kv ...attribute.KeyValue) {
+	otelSemantics := s.otelSemanticsEnabled
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, kv := range kv {
-		if k, v := toReservedAttributes(string(kv.Key), kv.Value); k != "" {
+		if k, v := toReservedAttributes(string(kv.Key), kv.Value, otelSemantics); k != "" {
 			s.attributes[k] = v
 		}
 	}
@@ -230,7 +241,11 @@ func (s *span) SetAttributes(kv ...attribute.KeyValue) {
 
 // toReservedAttributes recognizes a set of span attributes that have a special meaning.
 // These tags should supersede other values.
-func toReservedAttributes(k string, v attribute.Value) (string, any) {
+func toReservedAttributes(k string, v attribute.Value, otelSemantics bool) (string, any) {
+	if otelSemantics {
+		// Under OTel semantics, set every attribute as-is (no DD reserved-tag remapping).
+		return k, v.AsInterface()
+	}
 	switch k {
 	case "operation.name":
 		if ops := strings.ToLower(v.AsString()); ops != "" {
