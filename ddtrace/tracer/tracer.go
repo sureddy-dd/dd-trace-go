@@ -105,6 +105,10 @@ var _ Tracer = (*tracer)(nil)
 type tracer struct {
 	config *config
 
+	// otlpExportMode caches whether traces export via OTLP (vs the agent), resolved
+	// once at startup; OTLP carries span events natively (see serializeSpanEvents).
+	otlpExportMode bool
+
 	// stats specifies the concentrator used to compute statistics, when client-side
 	// stats are enabled. In OTLP export mode this is a noopConcentrator.
 	stats statsConcentrator
@@ -517,8 +521,12 @@ func newUnstartedTracer(opts ...StartOption) (t *tracer, err error) {
 	if c.internalConfig.OTLPExportMode() {
 		sc = &noopConcentrator{}
 	}
+	// Gate native span events on the actual writer, not the config flag: LogToStdout
+	// is selected before OTLP above, so a log/CI writer must keep events string-tagged.
+	_, otlpWriterSelected := writer.(*otlpTraceWriter)
 	t = &tracer{
 		config:           c,
+		otlpExportMode:   otlpWriterSelected,
 		traceWriter:      writer,
 		out:              make(chan *chunk, payloadQueueSize),
 		stop:             make(chan struct{}),
@@ -980,7 +988,7 @@ func (t *tracer) StartSpan(operationName string, options ...StartSpanOption) *Sp
 	if cSnap.Hostname != "" && cSnap.ReportHostname {
 		span.setMetaInit(keyHostname, cSnap.Hostname)
 	}
-	span.supportsEvents = t.config.agent.load().spanEventsAvailable
+	span.supportsEvents = t.config.agent.load().spanEventsAvailable || t.otlpExportMode
 
 	// add global tags
 	span.setTags(cSnap.GlobalTags)
