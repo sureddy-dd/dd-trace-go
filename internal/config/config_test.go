@@ -712,7 +712,7 @@ func TestOTLPSpanMetricsEnabled(t *testing.T) {
 		resetGlobalState()
 		defer resetGlobalState()
 
-		t.Setenv("OTEL_CLIENT_STATS_COMPUTATION_ENABLED", "true")
+		t.Setenv("OTEL_TRACES_SPAN_METRICS_ENABLED", "true")
 
 		cfg := Get()
 		require.NotNil(t, cfg)
@@ -724,7 +724,7 @@ func TestOTLPSpanMetricsEnabled(t *testing.T) {
 		defer resetGlobalState()
 
 		t.Setenv("OTEL_TRACES_EXPORTER", "otlp")
-		t.Setenv("OTEL_CLIENT_STATS_COMPUTATION_ENABLED", "false")
+		t.Setenv("OTEL_TRACES_SPAN_METRICS_ENABLED", "false")
 
 		cfg := Get()
 		require.NotNil(t, cfg)
