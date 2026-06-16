@@ -1309,6 +1309,19 @@ func (c *Config) OTLPSpanMetricsEnabled() bool {
 	return c.otlpExportMode && c.runtimeMetricsOtel
 }
 
+// SetOTLPSpanMetricsEnabled overrides the OTEL_TRACES_SPAN_METRICS_ENABLED value at runtime.
+// Passing nil clears the override so that the auto-enable logic takes effect again.
+func (c *Config) SetOTLPSpanMetricsEnabled(enabled bool, origin telemetry.Origin, product ...Product) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.checkProductConflict("OTEL_TRACES_SPAN_METRICS_ENABLED", origin, enabled, product...) {
+		return
+	}
+	v := enabled
+	c.otlpSpanMetricsEnabled = &v
+	configtelemetry.Report("OTEL_TRACES_SPAN_METRICS_ENABLED", enabled, origin)
+}
+
 // OTLPSemanticsMode reports whether DD_TRACE_OTEL_SEMANTICS_ENABLED is set.
 // When true, span-metric data points carry only OTel semantic-convention attributes;
 // Datadog-specific datadog.* attributes are omitted.
