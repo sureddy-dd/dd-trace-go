@@ -189,6 +189,8 @@ type Config struct {
 	// otlpMetricsFlushInterval is the cadence at which span metrics are flushed and exported.
 	// Fixed at 10 s in production; overridable via _DD_TRACE_METRICS_OTEL_FLUSH_INTERVAL (ms) in tests.
 	otlpMetricsFlushInterval time.Duration
+	// otlpMetricsProtocol is the OTLP export protocol for metrics: "http/json" or "http/protobuf".
+	otlpMetricsProtocol string
 	// traceID128BitEnabled controls if trace IDs are generated as 128-bits or 64-bits.
 	traceID128BitEnabled bool
 	// apiKey is the Datadog API key from DD_API_KEY (used for agentless intake, LLM Obs, etc.).
@@ -310,6 +312,7 @@ func loadConfig() *Config {
 		p.GetMap("OTEL_EXPORTER_OTLP_METRICS_HEADERS", nil, internal.OtelTagsDelimeter),
 	)
 	cfg.otlpMetricsFlushInterval = resolveOTLPMetricsFlushInterval(env.Get("_DD_TRACE_METRICS_OTEL_FLUSH_INTERVAL"))
+	cfg.otlpMetricsProtocol = resolveOTLPMetricsProtocol(p.GetString("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", ""))
 	cfg.traceID128BitEnabled = p.GetBool("DD_TRACE_128_BIT_TRACEID_GENERATION_ENABLED", true)
 	cfg.httpClientTimeout = time.Duration(p.GetIntWithValidator("DD_TRACE_AGENT_TIMEOUT", 10, validateAgentTimeout)) * time.Second
 
@@ -1340,6 +1343,13 @@ func (c *Config) OTLPMetricsFlushInterval() time.Duration {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.otlpMetricsFlushInterval
+}
+
+// OTLPMetricsProtocol returns the OTLP export protocol for metrics ("http/json" or "http/protobuf").
+func (c *Config) OTLPMetricsProtocol() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.otlpMetricsProtocol
 }
 
 func (c *Config) TraceID128BitEnabled() bool {
