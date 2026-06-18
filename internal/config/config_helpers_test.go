@@ -52,6 +52,42 @@ func TestResolveOTLPTraceURL(t *testing.T) {
 		got := resolveOTLPTraceURL(unixAgent, "")
 		assert.Equal(t, defaultLocalhost, got)
 	})
+
+	t.Run("IPv6 agent host is bracketed in default URL", func(t *testing.T) {
+		ipv6Agent := &url.URL{Scheme: "http", Host: "[::1]:8126"}
+		got := resolveOTLPTraceURL(ipv6Agent, "")
+		assert.Equal(t, "http://[::1]:4318/v1/traces", got)
+	})
+}
+
+func TestResolveOTLPMetricsURL(t *testing.T) {
+	httpAgent := &url.URL{Scheme: "http", Host: "myhost:8126"}
+
+	t.Run("default uses agent host with OTLP port", func(t *testing.T) {
+		got := resolveOTLPMetricsURL(httpAgent, "", false)
+		assert.Equal(t, "http://myhost:4318/v1/metrics", got)
+	})
+
+	t.Run("default with nil agent URL uses localhost", func(t *testing.T) {
+		got := resolveOTLPMetricsURL(nil, "", false)
+		assert.Equal(t, "http://localhost:4318/v1/metrics", got)
+	})
+
+	t.Run("IPv6 agent host is bracketed in default URL", func(t *testing.T) {
+		ipv6Agent := &url.URL{Scheme: "http", Host: "[::1]:8126"}
+		got := resolveOTLPMetricsURL(ipv6Agent, "", false)
+		assert.Equal(t, "http://[::1]:4318/v1/metrics", got)
+	})
+
+	t.Run("signal endpoint used as-is when path present", func(t *testing.T) {
+		got := resolveOTLPMetricsURL(httpAgent, "http://collector:4318/v1/metrics", false)
+		assert.Equal(t, "http://collector:4318/v1/metrics", got)
+	})
+
+	t.Run("generic endpoint appends /v1/metrics", func(t *testing.T) {
+		got := resolveOTLPMetricsURL(httpAgent, "http://collector:4318", true)
+		assert.Equal(t, "http://collector:4318/v1/metrics", got)
+	})
 }
 
 func TestValidateSendRetries(t *testing.T) {
