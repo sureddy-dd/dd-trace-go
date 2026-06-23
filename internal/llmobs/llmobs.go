@@ -584,7 +584,6 @@ func (l *LLMObs) llmobsSpanEvent(span *Span) *transport.LLMObsSpanEvent {
 	spanID := span.apm.SpanID()
 	parentID := defaultParentID
 	if span.parentID != "" {
-		// Explicit parent ID (offline/reconstruction) takes precedence.
 		parentID = span.parentID
 	} else if span.parent != nil {
 		parentID = span.parent.apm.SpanID()
@@ -802,8 +801,7 @@ func (l *LLMObs) StartSpan(ctx context.Context, kind SpanKind, name string, cfg 
 		span.llmTraceID = newLLMObsTraceID()
 	}
 
-	// Explicit IDs (for offline/reconstruction) take precedence over the
-	// inherited/generated values above.
+	// Explicit IDs override the inherited/generated values above.
 	if cfg.TraceID != "" {
 		span.llmTraceID = cfg.TraceID
 	}

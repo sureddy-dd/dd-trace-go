@@ -7,6 +7,7 @@ package llmobs_test
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"testing"
 
@@ -39,12 +40,15 @@ func TestStartSpanExplicitIDs(t *testing.T) {
 		)
 		span.Finish()
 
-		// Public getters reflect the chosen values.
 		wantSpanID := strconv.FormatUint(explicitSpanID, 10)
 		assert.Equal(t, wantSpanID, span.SpanID())
 		assert.Equal(t, explicitTraceID, span.TraceID())
+		// WithSpanID seeds the root span's APM trace ID lower 64 bits with the
+		// span ID; the LLMObs trace ID is driven independently by WithTraceID.
+		apmTraceID := span.APMTraceID()
+		require.Len(t, apmTraceID, 32)
+		assert.Equal(t, fmt.Sprintf("%016x", explicitSpanID), apmTraceID[16:])
 
-		// The emitted wire event reflects all three.
 		spans := tt.WaitForLLMObsSpans(t, 1)
 		require.Len(t, spans, 1)
 		assert.Equal(t, wantSpanID, spans[0].SpanID)
@@ -52,12 +56,36 @@ func TestStartSpanExplicitIDs(t *testing.T) {
 		assert.Equal(t, explicitParent, spans[0].ParentID)
 	})
 
+	t.Run("explicit-span-id-sets-apm-trace-id", func(t *testing.T) {
+		tt := testTracer(t)
+		defer tt.Stop()
+
+		span, _ := llmobs.StartLLMSpan(ctx, "span-id-only", llmobs.WithSpanID(explicitSpanID))
+		span.Finish()
+
+		wantSpanID := strconv.FormatUint(explicitSpanID, 10)
+		assert.Equal(t, wantSpanID, span.SpanID())
+		// The APM trace ID lower 64 bits follow the span ID, but the LLMObs trace
+		// ID stays independently generated rather than derived from it.
+		apmTraceID := span.APMTraceID()
+		require.Len(t, apmTraceID, 32)
+		assert.Equal(t, fmt.Sprintf("%016x", explicitSpanID), apmTraceID[16:])
+		assert.Len(t, span.TraceID(), 32)
+		assert.NotEqual(t, apmTraceID, span.TraceID())
+
+		spans := tt.WaitForLLMObsSpans(t, 1)
+		require.Len(t, spans, 1)
+		assert.Equal(t, wantSpanID, spans[0].SpanID)
+		assert.Equal(t, "undefined", spans[0].ParentID)
+	})
+
 	t.Run("explicit-parent-id-takes-precedence-over-derived-parent", func(t *testing.T) {
 		tt := testTracer(t)
 		defer tt.Stop()
 
-		// A real in-process parent exists, but an explicit parent ID should win.
-		_, parentCtx := llmobs.StartWorkflowSpan(ctx, "parent-workflow")
+		// A real in-process parent exists (left unfinished so only the child is
+		// emitted), but an explicit parent ID should win.
+		parent, parentCtx := llmobs.StartWorkflowSpan(ctx, "parent-workflow")
 		child, _ := llmobs.StartLLMSpan(parentCtx, "child-llm",
 			llmobs.WithParentID(explicitParent),
 		)
@@ -65,9 +93,13 @@ func TestStartSpanExplicitIDs(t *testing.T) {
 
 		spans := tt.WaitForLLMObsSpans(t, 1)
 		require.Len(t, spans, 1)
-		var childEvent = spans[0]
+		childEvent := spans[0]
 		assert.Equal(t, "child-llm", childEvent.Name)
+		// The explicit parent_id replaces the derived in-process parent...
 		assert.Equal(t, explicitParent, childEvent.ParentID)
+		assert.NotEqual(t, parent.SpanID(), childEvent.ParentID)
+		// ...while the child still inherits the parent's trace, keeping the tree coherent.
+		assert.Equal(t, parent.TraceID(), childEvent.TraceID)
 	})
 
 	t.Run("no-options-generates-ids-unchanged", func(t *testing.T) {
@@ -77,8 +109,6 @@ func TestStartSpanExplicitIDs(t *testing.T) {
 		span, _ := llmobs.StartLLMSpan(ctx, "generated-llm")
 		span.Finish()
 
-		// IDs are still generated (non-empty) and the parent is the default
-		// "undefined" sentinel when there is no parent/propagated context.
 		assert.NotEmpty(t, span.SpanID())
 		assert.NotEmpty(t, span.TraceID())
 
@@ -86,8 +116,9 @@ func TestStartSpanExplicitIDs(t *testing.T) {
 		require.Len(t, spans, 1)
 		assert.NotEmpty(t, spans[0].SpanID)
 		assert.NotEmpty(t, spans[0].TraceID)
+		// Parent is the "undefined" sentinel with no parent/propagated context.
 		assert.Equal(t, "undefined", spans[0].ParentID)
-		// Trace ID should be the generated 32-hex form, not a chosen value.
+		// Trace ID is the generated 32-hex form, not a chosen value.
 		assert.Len(t, spans[0].TraceID, 32)
 	})
 }

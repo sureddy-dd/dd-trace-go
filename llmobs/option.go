@@ -96,37 +96,43 @@ func WithIntegration(integration string) StartSpanOption {
 	}
 }
 
-// WithSpanID sets an explicit span ID for the span instead of minting one
-// internally. The ID is a uint64 to match the APM tracer's span ID type.
+// WithSpanID sets an explicit span ID instead of minting one internally. It is
+// a uint64 to match the APM tracer's span ID type; when unset (zero) the ID is
+// generated. When the backing APM span is a root (the provided context carries
+// no active span), this also seeds the APM trace ID's lower 64 bits with the
+// same value (matching tracer.WithSpanID); with 128-bit trace IDs enabled (the
+// default) the upper bits add a time component, so apm_trace_id is then not
+// fully deterministic.
 //
-// This is intended for offline or reconstruction use cases, such as a tool that
-// rebuilds finished agent sessions and must emit spans with deterministic,
-// synthetic IDs. When unset (zero value), the span ID is generated as before.
+// Intended for offline/reconstruction use cases that emit spans with
+// deterministic, synthetic IDs.
 func WithSpanID(id uint64) StartSpanOption {
 	return func(c *illmobs.StartSpanConfig) {
 		c.SpanID = id
 	}
 }
 
-// WithTraceID sets an explicit LLMObs trace ID for the span instead of
-// inheriting it from a parent/propagated span or generating one.
+// WithTraceID sets an explicit LLMObs trace ID instead of inheriting it from a
+// parent/propagated span or generating one. It must be a lowercase 32-character
+// hex string; it is not validated and is emitted as-is, so a malformed value can
+// break correlation. When unset (empty) it is inherited or generated.
 //
-// This is intended for offline or reconstruction use cases, such as a tool that
-// rebuilds finished agent sessions and must emit spans with deterministic,
-// synthetic IDs. When unset (empty string), the trace ID is inherited or
-// generated as before.
+// Intended for offline/reconstruction use cases that emit spans with
+// deterministic, synthetic IDs.
 func WithTraceID(traceID string) StartSpanOption {
 	return func(c *illmobs.StartSpanConfig) {
 		c.TraceID = traceID
 	}
 }
 
-// WithParentID sets an explicit parent ID for the span instead of deriving it
-// from an in-process parent or propagated span context.
+// WithParentID sets an explicit parent ID instead of deriving it from an
+// in-process parent or propagated span context. It is a string (not a uint64)
+// because it may reference a span minted in another process; it must be the
+// decimal form of a span ID. It is not validated and is emitted as-is. When
+// unset (empty) it is derived.
 //
-// This is intended for offline or reconstruction use cases, such as a tool that
-// rebuilds finished agent sessions and must emit spans with deterministic,
-// synthetic IDs. When unset (empty string), the parent ID is derived as before.
+// Intended for offline/reconstruction use cases that emit spans with
+// deterministic, synthetic IDs.
 func WithParentID(parentID string) StartSpanOption {
 	return func(c *illmobs.StartSpanConfig) {
 		c.ParentID = parentID

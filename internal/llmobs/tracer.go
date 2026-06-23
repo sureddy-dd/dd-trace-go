@@ -24,8 +24,7 @@ type StartAPMSpanConfig struct {
 	SpanType string
 	// StartTime is the start time for the span.
 	StartTime time.Time
-	// SpanID sets an explicit span ID for the backing APM span. If zero, the
-	// APM tracer mints one.
+	// SpanID sets an explicit span ID for the backing APM span. If zero, the APM tracer mints one.
 	SpanID uint64
 }
 
