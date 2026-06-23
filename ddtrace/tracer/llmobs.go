@@ -30,6 +30,9 @@ func (l *llmobsTracerAdapter) StartSpan(ctx context.Context, name string, cfg ll
 	if cfg.SpanType != "" {
 		opts = append(opts, SpanType(cfg.SpanType))
 	}
+	if cfg.SpanID != 0 {
+		opts = append(opts, WithSpanID(cfg.SpanID))
+	}
 	span, ctx := StartSpanFromContext(ctx, name, opts...)
 	return &llmobsSpanAdapter{span}, ctx
 }

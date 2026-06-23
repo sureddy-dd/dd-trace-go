@@ -34,6 +34,16 @@ type StartSpanConfig struct {
 	StartTime time.Time
 	// Name of the tracing integration.
 	Integration string
+	// SpanID sets an explicit span ID for the span. If zero, one is generated.
+	// Intended for offline/reconstruction use cases that emit spans with
+	// deterministic synthetic IDs.
+	SpanID uint64
+	// TraceID sets an explicit LLMObs trace ID for the span. If empty, the trace
+	// ID is inherited from a parent/propagated span or generated.
+	TraceID string
+	// ParentID sets an explicit parent ID for the span. If empty, the parent ID
+	// is derived from an in-process parent or propagated span context.
+	ParentID string
 }
 
 // FinishSpanConfig contains configuration options for finishing an LLMObs span.
@@ -239,10 +249,13 @@ type Span struct {
 	llmCtx llmobsContext
 
 	llmTraceID string
-	name       string
-	mlApp      string
-	spanKind   SpanKind
-	sessionID  string
+	// parentID, when non-empty, overrides the derived parent ID in the emitted
+	// span event. Set via the public WithParentID option for offline/reconstruction.
+	parentID  string
+	name      string
+	mlApp     string
+	spanKind  SpanKind
+	sessionID string
 
 	integration string
 	scope       string

@@ -96,6 +96,43 @@ func WithIntegration(integration string) StartSpanOption {
 	}
 }
 
+// WithSpanID sets an explicit span ID for the span instead of minting one
+// internally. The ID is a uint64 to match the APM tracer's span ID type.
+//
+// This is intended for offline or reconstruction use cases, such as a tool that
+// rebuilds finished agent sessions and must emit spans with deterministic,
+// synthetic IDs. When unset (zero value), the span ID is generated as before.
+func WithSpanID(id uint64) StartSpanOption {
+	return func(c *illmobs.StartSpanConfig) {
+		c.SpanID = id
+	}
+}
+
+// WithTraceID sets an explicit LLMObs trace ID for the span instead of
+// inheriting it from a parent/propagated span or generating one.
+//
+// This is intended for offline or reconstruction use cases, such as a tool that
+// rebuilds finished agent sessions and must emit spans with deterministic,
+// synthetic IDs. When unset (empty string), the trace ID is inherited or
+// generated as before.
+func WithTraceID(traceID string) StartSpanOption {
+	return func(c *illmobs.StartSpanConfig) {
+		c.TraceID = traceID
+	}
+}
+
+// WithParentID sets an explicit parent ID for the span instead of deriving it
+// from an in-process parent or propagated span context.
+//
+// This is intended for offline or reconstruction use cases, such as a tool that
+// rebuilds finished agent sessions and must emit spans with deterministic,
+// synthetic IDs. When unset (empty string), the parent ID is derived as before.
+func WithParentID(parentID string) StartSpanOption {
+	return func(c *illmobs.StartSpanConfig) {
+		c.ParentID = parentID
+	}
+}
+
 // ------------- Finish options -------------
 
 // FinishSpanOption configures span finishing. Use with span.Finish().
