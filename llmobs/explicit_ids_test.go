@@ -1,7 +1,7 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2025 Datadog, Inc.
+// Copyright 2026 Datadog, Inc.
 
 package llmobs_test
 
@@ -77,6 +77,47 @@ func TestStartSpanExplicitIDs(t *testing.T) {
 		require.Len(t, spans, 1)
 		assert.Equal(t, wantSpanID, spans[0].SpanID)
 		assert.Equal(t, "undefined", spans[0].ParentID)
+	})
+
+	t.Run("explicit-trace-id-only", func(t *testing.T) {
+		tt := testTracer(t)
+		defer tt.Stop()
+
+		span, _ := llmobs.StartLLMSpan(ctx, "trace-id-only", llmobs.WithTraceID(explicitTraceID))
+		span.Finish()
+
+		assert.Equal(t, explicitTraceID, span.TraceID())
+		// The span ID is still generated (not the explicit trace ID), and the
+		// backing apm_trace_id is independent of the chosen LLMObs trace ID.
+		assert.NotEmpty(t, span.SpanID())
+		assert.NotEqual(t, explicitTraceID, span.APMTraceID())
+
+		spans := tt.WaitForLLMObsSpans(t, 1)
+		require.Len(t, spans, 1)
+		assert.Equal(t, explicitTraceID, spans[0].TraceID)
+		assert.Equal(t, "undefined", spans[0].ParentID)
+	})
+
+	t.Run("child-inherits-reconstructed-parent-trace", func(t *testing.T) {
+		tt := testTracer(t)
+		defer tt.Stop()
+
+		// Parent reconstructed with an explicit trace ID (left unfinished so only
+		// the child is emitted); a child with no ID options should inherit it.
+		parent, parentCtx := llmobs.StartWorkflowSpan(ctx, "reconstructed-parent",
+			llmobs.WithTraceID(explicitTraceID),
+		)
+		child, _ := llmobs.StartLLMSpan(parentCtx, "child-llm")
+		child.Finish()
+
+		spans := tt.WaitForLLMObsSpans(t, 1)
+		require.Len(t, spans, 1)
+		childEvent := spans[0]
+		// Child inherits the parent's reconstructed trace...
+		assert.Equal(t, explicitTraceID, childEvent.TraceID)
+		assert.Equal(t, parent.TraceID(), childEvent.TraceID)
+		// ...and derives its parent_id from the parent's APM span ID.
+		assert.Equal(t, parent.SpanID(), childEvent.ParentID)
 	})
 
 	t.Run("explicit-parent-id-takes-precedence-over-derived-parent", func(t *testing.T) {

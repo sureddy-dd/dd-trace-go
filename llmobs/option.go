@@ -117,6 +117,9 @@ func WithSpanID(id uint64) StartSpanOption {
 // hex string; it is not validated and is emitted as-is, so a malformed value can
 // break correlation. When unset (empty) it is inherited or generated.
 //
+// Only the LLMObs trace is set; the backing APM span's trace ID (apm_trace_id)
+// is left independent and will not match.
+//
 // Intended for offline/reconstruction use cases that emit spans with
 // deterministic, synthetic IDs.
 func WithTraceID(traceID string) StartSpanOption {
@@ -130,6 +133,9 @@ func WithTraceID(traceID string) StartSpanOption {
 // because it may reference a span minted in another process; it must be the
 // decimal form of a span ID. It is not validated and is emitted as-is. When
 // unset (empty) it is derived.
+//
+// Only the LLMObs span tree is affected; the backing APM span is not reparented.
+// Pair this with WithSpanID on the parent so children reference deterministic IDs.
 //
 // Intended for offline/reconstruction use cases that emit spans with
 // deterministic, synthetic IDs.

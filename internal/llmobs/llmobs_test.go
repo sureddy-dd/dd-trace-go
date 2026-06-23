@@ -1318,6 +1318,34 @@ func TestPropagatedInfo(t *testing.T) {
 		span.Finish(llmobs.FinishSpanConfig{})
 	})
 
+	t.Run("explicit-ids-override-propagated", func(t *testing.T) {
+		tt, ll := testTracer(t)
+		ctx := context.Background()
+
+		propagated := &llmobs.PropagatedLLMSpan{
+			TraceID: "propagated-trace-123",
+			SpanID:  "propagated-span-456",
+			MLApp:   "propagated-app",
+		}
+		ctx = llmobs.ContextWithPropagatedLLMSpan(ctx, propagated)
+
+		const (
+			explicitTraceID = "0123456789abcdef0123456789abcdef"
+			explicitParent  = "9876543210987654321"
+		)
+		span, _ := ll.StartSpan(ctx, llmobs.SpanKindLLM, "reconstructed", llmobs.StartSpanConfig{
+			TraceID:  explicitTraceID,
+			ParentID: explicitParent,
+		})
+		assert.Equal(t, explicitTraceID, span.TraceID(), "Explicit trace ID should override propagated")
+		span.Finish(llmobs.FinishSpanConfig{})
+
+		llmSpans := tt.WaitForLLMObsSpans(t, 1)
+		require.Len(t, llmSpans, 1)
+		assert.Equal(t, explicitTraceID, llmSpans[0].TraceID)
+		assert.Equal(t, explicitParent, llmSpans[0].ParentID, "Explicit parent ID should override propagated span ID")
+	})
+
 	t.Run("ml-app-precedence", func(t *testing.T) {
 		// Test precedence: config > parent > propagated > global
 		t.Run("config-overrides-all", func(t *testing.T) {
